@@ -1,6 +1,7 @@
 import {Handler} from "./HandlerInterface";
 import Ajv from "ajv";
 import client from "../elastic-client";
+import {ValidationError} from "../../exceptions";
 
 const ajv = new Ajv();
 
@@ -13,11 +14,14 @@ const schema = {
         file_url: {
             type: "string"
         },
+        file_size_in_bytes: {
+            type: "integer"
+        },
         duration_in_ms: {
             type: "integer"
         }
     },
-    required: ["institution_id", "file_url", "duration_in_ms"]
+    required: ["institution_id", "file_url", "duration_in_ms", "file_size_in_bytes"]
 }
 
 const _validate = ajv.compile(schema)
@@ -25,23 +29,24 @@ const _validate = ajv.compile(schema)
 
 export default class ContentDownloadHandler implements Handler {
     public static REGISTRY_ID = "content_download_duration_v1";
-    private readonly payload: {
-        [p: string]: any
-    }
 
-    constructor(payload) {
-        this.payload = payload;
-    }
 
-    async handle(): Promise<void> {
+    async publish(payload): Promise<void> {
+        if(!_validate(payload)) throw new ValidationError("Invalid request payload")
         await client.index({
             index: ContentDownloadHandler.REGISTRY_ID,
-            document: this.payload
+            document: payload
         })
     }
 
-    validate(): boolean {
-        return _validate(this.payload);
+    async fetchAnalytics(): Promise<void> {
+        const result = await client.search({
+            index: ContentDownloadHandler.REGISTRY_ID,
+            query: {
+                match: { quote: 'winter' }
+            }
+        })
+        return Promise.resolve(undefined);
     }
 
 }

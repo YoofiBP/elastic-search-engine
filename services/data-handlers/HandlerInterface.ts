@@ -1,5 +1,5 @@
 export interface Handler {
-    validate: () => boolean
+    publish: (payload) => Promise<void>
 
-    handle: () => Promise<void>
+    fetchAnalytics: (params) => Promise<void>
 }
