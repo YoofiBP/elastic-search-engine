@@ -1,9 +1,7 @@
 import {Handler} from "./HandlerInterface";
-import Ajv from "ajv";
 import client from "../elastic-client";
-import {ValidationError} from "../../exceptions";
-
-const ajv = new Ajv();
+import {AjvValidationError} from "../../exceptions";
+import ajvValidator from "../validation";
 
 const publishSchema = {
     type: "object",
@@ -14,6 +12,12 @@ const publishSchema = {
         session_hash_id: {
             type: "string"
         },
+        course_hash_id: {
+            type: "string"
+        },
+        folder_hash_id: {
+            type: "string"
+        },
         user_api_token: {
             type: "string"
         },
@@ -22,50 +26,67 @@ const publishSchema = {
         }
     },
     additionalProperties: false,
-    required: ["institution_id", "session_hash_id", "user_api_token", "duration_in_ms"]
+    required: ["institution_id", "session_hash_id", "course_hash_id", "user_api_token", "duration_in_ms"]
 }
 
-const validateForPublishing = ajv.compile(publishSchema)
+const validateForPublishing = ajvValidator.compile(publishSchema)
 
 const queryParamSchema = {
     type: "object",
     properties: {
         institution_id: {
             type: "integer"
+        },
+        startDate: {
+            type: "string"
+        },
+        endDate: {
+            type: "string"
         }
     },
     required: ["institution_id"]
 }
 
-const validateParams = ajv.compile(queryParamSchema);
+const validateParams = ajvValidator.compile<Params>(queryParamSchema);
+
+type Params = {
+    institution_id: string;
+    startDate?: string;
+    endDate?: string;
+}
 
 export default class SessionDurationHandler implements Handler {
-    public static REGISTRY_ID = "session-duration"
+    public static REGISTRY_ID = "user_session_duration_data_v1"
 
     async publish(payload) {
-        if(!validateForPublishing(payload)) throw new ValidationError("Invalid request payload")
+        if(!validateForPublishing(payload)) throw new AjvValidationError(validateForPublishing.errors)
         await client.index({
             index: SessionDurationHandler.REGISTRY_ID,
             document: payload
         })
     }
 
-    async fetchAnalytics(params): Promise<void> {
-        //validate and parse params
-        const {institution_id} = params;
-        const result = await client.search({
+
+    async fetchAnalytics(params: object): Promise<void> {
+        if(!validateParams(params)) throw new AjvValidationError(validateParams.errors);
+
+        const {institution_id, startDate, endDate} = params;
+        return await client.search({
             index: SessionDurationHandler.REGISTRY_ID,
+            size: 0,
             query: {
                 bool: {
                     filter: [
                         {
-                            match: { institution_id }
+                            match: {
+                                institution_id
+                            }
                         },
                         {
                             range: {
                                 "@timestamp": {
-                                    gte: "now-30d/d",
-                                    lte: "now"
+                                    gte: startDate ?? "now-30d/d",
+                                    lte: endDate ?? "now"
                                 }
                             }
                         }
@@ -105,7 +126,6 @@ export default class SessionDurationHandler implements Handler {
                     }
                 }
             }
-        })
-        return Promise.resolve(result);
+        });
     }
 }

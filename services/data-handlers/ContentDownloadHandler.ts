@@ -1,7 +1,7 @@
 import {Handler} from "./HandlerInterface";
 import Ajv from "ajv";
 import client from "../elastic-client";
-import {ValidationError} from "../../exceptions";
+import {AjvValidationError} from "../../exceptions";
 
 const ajv = new Ajv();
 
@@ -32,7 +32,7 @@ export default class ContentDownloadHandler implements Handler {
 
 
     async publish(payload): Promise<void> {
-        if(!_validate(payload)) throw new ValidationError("Invalid request payload")
+        if(!_validate(payload)) throw new AjvValidationError(_validate.errors)
         await client.index({
             index: ContentDownloadHandler.REGISTRY_ID,
             document: payload
@@ -40,13 +40,12 @@ export default class ContentDownloadHandler implements Handler {
     }
 
     async fetchAnalytics(): Promise<void> {
-        const result = await client.search({
+        return  await client.search({
             index: ContentDownloadHandler.REGISTRY_ID,
             query: {
                 match: { quote: 'winter' }
             }
         })
-        return Promise.resolve(undefined);
     }
 
 }
