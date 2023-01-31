@@ -94,7 +94,7 @@ export default class SessionDurationHandler implements Handler {
                 }
             },
             aggs: {
-                "avg_reading_time_in_ms": {
+                "courses": {
                     terms: {
                         field: "course_hash_id"
                     },
